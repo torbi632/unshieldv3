@@ -1,0 +1,54 @@
+name: Build and use unshieldv3
+
+on:
+  push:                # 推送时触发
+    branches: [ main ]
+  pull_request:        # PR 时触发
+  workflow_dispatch:   # 手动触发
+
+jobs:
+  build-and-extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 检出您的仓库（里面应包含 unshieldv3 源码和 .Z 文件）
+      - name: Checkout your repository
+        uses: actions/checkout@v4
+
+      # 2. 安装编译依赖
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc cmake make
+
+      # 3. 构建 unshieldv3（假设源码位于仓库根目录下的 unshieldv3/ 子目录）
+      - name: Build unshieldv3
+        run: |
+          cd unshieldv3
+          mkdir -p build && cd build
+          cmake ..
+          make -j$(nproc)
+          # 编译后二进制路径: unshieldv3/build/unshieldv3
+
+      # 4. （可选）查看存档信息
+      - name: Show archive info
+        run: |
+          ./unshieldv3/build/unshieldv3 info path/to/your/archive.Z
+
+      # 5. 列出存档内容（带详细信息）
+      - name: List archive contents
+        run: |
+          ./unshieldv3/build/unshieldv3 list -v path/to/your/archive.Z
+
+      # 6. 解压所有文件到 DESTDIR
+      - name: Extract archive
+        run: |
+          mkdir extracted
+          ./unshieldv3/build/unshieldv3 extract path/to/your/archive.Z extracted/
+
+      # 7. 将解压后的文件上传为 Artifact（方便下载查看）
+      - name: Upload extracted files
+        uses: actions/upload-artifact@v4
+        with:
+          name: extracted-files
+          path: extracted/
