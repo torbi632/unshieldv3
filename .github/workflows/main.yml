@@ -1,54 +1,48 @@
-name: Build and use unshieldv3
+name: Cross-compile unshieldv3 for Windows
 
 on:
-  push:                # 推送时触发
+  push:
     branches: [ main ]
-  pull_request:        # PR 时触发
-  workflow_dispatch:   # 手动触发
+  workflow_dispatch:
 
 jobs:
-  build-and-extract:
+  build-mingw:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 检出您的仓库（里面应包含 unshieldv3 源码和 .Z 文件）
       - name: Checkout your repository
         uses: actions/checkout@v4
 
-      # 2. 安装编译依赖
-      - name: Install dependencies
+      # 如果源码需要单独克隆，可取消注释
+      # - name: Clone unshieldv3
+      #   run: git clone https://github.com/wolfgangf/unshieldv3.git
+
+      - name: Install MinGW-w64
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc cmake make
+          sudo apt-get install -y gcc-mingw-w64-x86-64 cmake make
 
-      # 3. 构建 unshieldv3（假设源码位于仓库根目录下的 unshieldv3/ 子目录）
-      - name: Build unshieldv3
+      - name: Configure CMake for Windows cross-compile
         run: |
           cd unshieldv3
-          mkdir -p build && cd build
-          cmake ..
+          mkdir build && cd build
+          cmake .. -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+                   -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+                   -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres
+
+      - name: Build
+        run: |
+          cd unshieldv3/build
           make -j$(nproc)
-          # 编译后二进制路径: unshieldv3/build/unshieldv3
 
-      # 4. （可选）查看存档信息
-      - name: Show archive info
+      # 生成的 EXE 位于 unshieldv3/build/unshieldv3.exe
+      - name: Test extraction (using Wine 或直接运行，但非必须)
         run: |
-          ./unshieldv3/build/unshieldv3 info path/to/your/archive.Z
+          # 由于是 Linux 环境，无法直接运行 .exe，但可以上传供下载
+          echo "Build completed. EXE is ready."
 
-      # 5. 列出存档内容（带详细信息）
-      - name: List archive contents
-        run: |
-          ./unshieldv3/build/unshieldv3 list -v path/to/your/archive.Z
-
-      # 6. 解压所有文件到 DESTDIR
-      - name: Extract archive
-        run: |
-          mkdir extracted
-          ./unshieldv3/build/unshieldv3 extract path/to/your/archive.Z extracted/
-
-      # 7. 将解压后的文件上传为 Artifact（方便下载查看）
-      - name: Upload extracted files
+      - name: Upload Windows EXE
         uses: actions/upload-artifact@v4
         with:
-          name: extracted-files
-          path: extracted/
+          name: unshieldv3-windows-cross-compiled
+          path: unshieldv3/build/unshieldv3.exe
