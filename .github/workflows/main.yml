@@ -1,23 +1,24 @@
-name: Build unshieldv3 for Windows
+name: Build unshieldv3 on Windows
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:   # 手动触发
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout your repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 如果你的源码需要单独克隆，可取消下面注释
-      # - name: Clone unshieldv3
-      #   run: git clone https://github.com/wolfgangf/unshieldv3.git
+      # 关键步骤：设置 MSVC 开发环境（x64）
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
-      - name: Configure CMake (Visual Studio)
+      # 现在 CMake 能正确检测到 Visual Studio
+      - name: Configure CMake
         run: |
           cd build
           cmake .. -G "Visual Studio 17 2022" -A x64
@@ -25,23 +26,21 @@ jobs:
       - name: Build Release
         run: |
           cd build
-          cmake --build . --config Release
+          cmake --build . --config Release --parallel
 
-      # 编译产物路径：unshieldv3/build/Release/unshieldv3.exe
-      - name: List archive and extract (示例)
+      # 验证是否为 Windows PE（可选）
+      - name: Verify EXE
         run: |
-          .\build\Release\unshieldv3.exe list -v .\path\to\your\archive.Z
-          mkdir extracted
-          .\build\Release\unshieldv3.exe extract .\path\to\your\archive.Z .\extracted\
+          $bytes = [System.IO.File]::ReadAllBytes(".\build\Release\unshieldv3.exe")
+          if ($bytes[0] -eq 0x4D -and $bytes[1] -eq 0x5A) {
+            Write-Host "✅ Valid Windows executable (MZ header found)"
+          } else {
+            Write-Error "❌ Not a valid PE file"
+            exit 1
+          }
 
-      - name: Upload EXE as Artifact
+      - name: Upload unshieldv3.exe
         uses: actions/upload-artifact@v4
         with:
-          name: unshieldv3-windows-exe
+          name: unshieldv3.exe
           path: build/Release/unshieldv3.exe
-
-      - name: Upload extracted files
-        uses: actions/upload-artifact@v4
-        with:
-          name: extracted-files
-          path: extracted/
