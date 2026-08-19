@@ -1,4 +1,4 @@
-name: Build unshieldv3 on Windows
+name: Build unshieldv3 on Windows (NMake)
 
 on:
   workflow_dispatch:   # 手动触发
@@ -11,36 +11,38 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 关键步骤：设置 MSVC 开发环境（x64）
+      # 设置 MSVC 编译环境（x64）
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      # 现在 CMake 能正确检测到 Visual Studio
-      - name: Configure CMake
+      # 使用 NMake 生成器，不依赖 VS 实例
+      - name: Configure with NMake
+        run: |
+          mkdir build && cd build
+          cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release
+
+      # 编译
+      - name: Build with NMake
         run: |
           cd build
-          cmake .. -G "Visual Studio 17 2022" -A x64
+          nmake
 
-      - name: Build Release
-        run: |
-          cd build
-          cmake --build . --config Release --parallel
-
-      # 验证是否为 Windows PE（可选）
+      # 验证是否为 Windows PE
       - name: Verify EXE
         run: |
-          $bytes = [System.IO.File]::ReadAllBytes(".\build\Release\unshieldv3.exe")
+          $bytes = [System.IO.File]::ReadAllBytes(".\unshieldv3\build\unshieldv3.exe")
           if ($bytes[0] -eq 0x4D -and $bytes[1] -eq 0x5A) {
-            Write-Host "✅ Valid Windows executable (MZ header found)"
+            Write-Host "✅ Valid Windows executable"
           } else {
-            Write-Error "❌ Not a valid PE file"
+            Write-Error "❌ Not a PE file"
             exit 1
           }
 
+      # 上传生成的 EXE（NMake 产物在 build/ 根目录，不在 Release 子目录）
       - name: Upload unshieldv3.exe
         uses: actions/upload-artifact@v4
         with:
           name: unshieldv3.exe
-          path: build/Release/unshieldv3.exe
+          path: build/unshieldv3.exe
