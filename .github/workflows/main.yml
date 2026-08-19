@@ -20,7 +20,7 @@ jobs:
       # 使用 NMake 生成器，不依赖 VS 实例
       - name: Configure with NMake
         run: |
-          mkdir build && cd build
+          cd build
           cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release
 
       # 编译
