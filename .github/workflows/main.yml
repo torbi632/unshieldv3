@@ -1,4 +1,4 @@
-name: Build unshieldv3 on Windows (NMake)
+name: Build unshieldv3 on Windows (MSVC)
 
 on:
   workflow_dispatch:   # 手动触发
@@ -11,38 +11,63 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 设置 MSVC 编译环境（x64）
+      # 设置 MSVC 开发环境
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      # 使用 NMake 生成器，不依赖 VS 实例
+      # ---- 修补 ISArchiveV3.h（位于根目录） ----
+      - name: Patch ISArchiveV3.h for MSVC
+        run: |
+          $file = "ISArchiveV3.h"
+          if (-not (Test-Path $file)) {
+            Write-Error "File $file not found in root directory"
+            exit 1
+          }
+          $content = Get-Content $file -Raw
+          $content = $content -replace '__attribute__\s*\(\s*\(\s*packed\s*\)\s*\)', ''
+          $content = "#pragma pack(push, 1)`n" + $content + "`n#pragma pack(pop)"
+          Set-Content -Path $file -Value $content -NoNewline
+          Write-Host "✅ Patched $file for MSVC"
+        shell: pwsh
+
+      # ---- 配置 CMake（源码就在当前目录） ----
       - name: Configure with NMake
         run: |
           cd build
           cmake .. -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release
 
-      # 编译
-      - name: Build with NMake
+      # ---- 编译 ----
+      - name: Build
         run: |
           cd build
           nmake
 
-      # 验证是否为 Windows PE
+      # ---- 验证 EXE ----
       - name: Verify EXE
         run: |
-          $bytes = [System.IO.File]::ReadAllBytes(".\unshieldv3\build\unshieldv3.exe")
+          $bytes = [System.IO.File]::ReadAllBytes("build/unshieldv3.exe")
           if ($bytes[0] -eq 0x4D -and $bytes[1] -eq 0x5A) {
-            Write-Host "✅ Valid Windows executable"
+            Write-Host "✅ Valid Windows executable (MZ header found)"
           } else {
-            Write-Error "❌ Not a PE file"
+            Write-Error "❌ Not a valid PE file"
             exit 1
           }
 
-      # 上传生成的 EXE（NMake 产物在 build/ 根目录，不在 Release 子目录）
+      # ---- 上传 EXE ----
       - name: Upload unshieldv3.exe
         uses: actions/upload-artifact@v4
         with:
           name: unshieldv3.exe
           path: build/unshieldv3.exe
+
+      # （可选）提取您的 .Z 存档
+      # - name: Extract archive
+      #   run: |
+      #     mkdir extracted
+      #     .\build\unshieldv3.exe extract .\path\to\your\archive.Z .\extracted\
+      # - uses: actions/upload-artifact@v4
+      #   with:
+      #     name: extracted-files
+      #     path: extracted/
